@@ -30,6 +30,7 @@ class NIOSocketTCPClient(val host: String,
     private var mWorkThread: Thread? = null
     private var mToSendPackets: Queue<Packet> = ConcurrentLinkedQueue()
     private var mLastAddedPacket: Packet? = null
+    private var mForceDisconnect: AtomicBoolean = AtomicBoolean(false)
 
     fun connect(): Boolean = when (mConnectionState) {
         ClientConnectionState.CONNECTED -> true
@@ -37,6 +38,7 @@ class NIOSocketTCPClient(val host: String,
         ClientConnectionState.DISCONNECTING -> false
         ClientConnectionState.DISCONNECTED -> {
             clearHandlerMessages()
+            mForceDisconnect.set(false)
             mConnectionState = ClientConnectionState.CONNECTING
             mWorkThread = Thread(mWorkRunnable)
             mWorkThread?.start()
@@ -47,7 +49,10 @@ class NIOSocketTCPClient(val host: String,
     fun disconnect(): Boolean = when (mConnectionState) {
         ClientConnectionState.DISCONNECTED -> true
         ClientConnectionState.DISCONNECTING -> false
-        ClientConnectionState.CONNECTING -> false
+        ClientConnectionState.CONNECTING -> {
+            mForceDisconnect.set(true)
+            false
+        }
         ClientConnectionState.CONNECTED -> {
             mConnectionState = ClientConnectionState.DISCONNECTING
             mWorkRunnable.stopWork()
@@ -55,11 +60,11 @@ class NIOSocketTCPClient(val host: String,
         }
     }
 
-    fun sendPacket(packet: Packet): Boolean {
+    @Synchronized fun sendPacket(packet: Packet): Boolean {
         if (mConnectionState == ClientConnectionState.CONNECTED) {
             mToSendPackets.add(packet)
             mLastAddedPacket = packet
-            //mWorkRunnable.interruptSend()
+            mWorkRunnable.interruptSend()
             return true
         }
         return false
@@ -116,6 +121,7 @@ class NIOSocketTCPClient(val host: String,
 
 
         fun stopWork() {
+            mForceDisconnect.set(true)
             mIsDoneWorkThread.set(true)
             mSelector.wakeup()
         }
@@ -136,7 +142,7 @@ class NIOSocketTCPClient(val host: String,
                 mIsDoneWorkThread.set(false)
                 if (!initConnection()) return
 
-                while (!mIsDoneWorkThread.get()) {
+                while (!mIsDoneWorkThread.get() && !mForceDisconnect.get()) {
                     if (mSelector.select() > 0 && !processKeys(mSelector.selectedKeys())) break
                 }
             } catch (e: Exception) {
@@ -149,7 +155,7 @@ class NIOSocketTCPClient(val host: String,
         private fun processKeys(keys: MutableSet<SelectionKey>): Boolean {
             val keysIterator = keys.iterator()
             while (keysIterator.hasNext()) {
-                if (mIsDoneWorkThread.get()) return false
+                if (mIsDoneWorkThread.get() || mForceDisconnect.get()) return false
 
                 val key = keysIterator.next()
                 keysIterator.remove()
@@ -183,6 +189,7 @@ class NIOSocketTCPClient(val host: String,
         private fun closeConnection() {
             try {
                 clearQueues()
+                mForceDisconnect.set(true)
                 mIsDoneWorkThread.set(true)
                 mCurrentSendingItem?.buffer?.clear()
                 mCurrentSendingItem = null
