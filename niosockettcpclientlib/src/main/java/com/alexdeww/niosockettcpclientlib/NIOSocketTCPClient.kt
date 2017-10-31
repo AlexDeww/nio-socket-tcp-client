@@ -59,7 +59,7 @@ class NIOSocketTCPClient(val host: String,
         if (mConnectionState == ClientConnectionState.CONNECTED) {
             mToSendPackets.add(packet)
             mLastAddedPacket = packet
-            mWorkRunnable.interruptSend()
+            //mWorkRunnable.interruptSend()
             return true
         }
         return false
