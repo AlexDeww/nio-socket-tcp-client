@@ -13,7 +13,6 @@ import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
-
 class NIOSocketTCPClient(val host: String,
                          val port: Int,
                          val keepAlive: Boolean,
@@ -29,7 +28,6 @@ class NIOSocketTCPClient(val host: String,
     private var mConnectionState: ClientConnectionState = ClientConnectionState.DISCONNECTED
     private var mWorkThread: Thread? = null
     private var mToSendPackets: Queue<Packet> = ConcurrentLinkedQueue()
-    private var mLastAddedPacket: Packet? = null
     private var mForceDisconnect: AtomicBoolean = AtomicBoolean(false)
 
     fun connect(): Boolean = when (mConnectionState) {
@@ -60,10 +58,9 @@ class NIOSocketTCPClient(val host: String,
         }
     }
 
-    @Synchronized fun sendPacket(packet: Packet): Boolean {
+    fun sendPacket(packet: Packet): Boolean {
         if (mConnectionState == ClientConnectionState.CONNECTED) {
             mToSendPackets.add(packet)
-            mLastAddedPacket = packet
             mWorkRunnable.interruptSend()
             return true
         }
@@ -133,11 +130,11 @@ class NIOSocketTCPClient(val host: String,
                 mSelector.wakeup()
             } catch (e: Exception) {
                 Log.e("NIOSocketTCPClient", "interruptSend", e)
-                //doError(e.message, ClientState.SENDING, mLastAddedPacket)
             }
         }
 
         override fun run() {
+            Log.e("NIOSocketTCPClient", "Start nio thread $this")
             try {
                 mIsDoneWorkThread.set(false)
                 if (!initConnection()) return
@@ -150,6 +147,7 @@ class NIOSocketTCPClient(val host: String,
             } finally {
                 closeConnection()
             }
+            Log.e("NIOSocketTCPClient", "Stop nio thread $this")
         }
 
         private fun processKeys(keys: MutableSet<SelectionKey>): Boolean {
