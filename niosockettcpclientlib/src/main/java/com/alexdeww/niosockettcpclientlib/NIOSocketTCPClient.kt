@@ -73,10 +73,10 @@ class NIOSocketTCPClient(val host: String,
                 mWorkRunnable?.removeCallback()
                 mWorkThread?.interrupt()
                 mWorkRunnable?.wakeupSelector()
-                mWorkThread = null
-                mWorkRunnable = null
                 callbackEvents.onDisconnected(this@NIOSocketTCPClient)
             }
+            mWorkThread = null
+            mWorkRunnable = null
         }
     }
 
