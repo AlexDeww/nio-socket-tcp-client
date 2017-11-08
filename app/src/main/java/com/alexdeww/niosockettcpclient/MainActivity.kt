@@ -3,8 +3,7 @@ package com.alexdeww.niosockettcpclient
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
-import com.alexdeww.niosockettcpclientlib.NIOSocketTCPClient
-import com.alexdeww.niosockettcpclientlib.common.*
+import com.alexdeww.niosockettcpclientlib.*
 import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {

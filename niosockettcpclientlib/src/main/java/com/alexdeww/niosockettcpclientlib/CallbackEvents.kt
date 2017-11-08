@@ -1,6 +1,4 @@
-package com.alexdeww.niosockettcpclientlib.common
-
-import com.alexdeww.niosockettcpclientlib.NIOSocketTCPClient
+package com.alexdeww.niosockettcpclientlib
 
 interface CallbackEvents {
 

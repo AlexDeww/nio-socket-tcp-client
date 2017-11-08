@@ -1,7 +1,6 @@
-package com.alexdeww.niosockettcpclientlib.internal
+package com.alexdeww.niosockettcpclientlib
 
 import android.util.Log
-import com.alexdeww.niosockettcpclientlib.common.*
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.SelectionKey
@@ -11,11 +10,11 @@ import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
-class NIOSocketTCPClientRunnable(private val host: String,
-                                 private val port: Int,
-                                 private val keepAlive: Boolean,
-                                 private val packetProtocol: PacketProtocol,
-                                 private val packetSerializer: PacketSerializer) : Runnable {
+internal class NIOSocketTCPClientRunnable(private val host: String,
+                                          private val port: Int,
+                                          private val keepAlive: Boolean,
+                                          private val packetProtocol: PacketProtocol,
+                                          private val packetSerializer: PacketSerializer) : Runnable {
 
     companion object {
         private const val TAG = "NIOSocketTCPClientR"
@@ -43,7 +42,7 @@ class NIOSocketTCPClientRunnable(private val host: String,
     private var mIsSelectorInit: Boolean = false
     private var mCallback: Callback? = null
 
-    private fun safeCall(block: () -> Unit) {
+    private inline fun safeCall(block: () -> Unit) {
         try {
             block()
         } catch (e: Throwable) {
@@ -52,7 +51,7 @@ class NIOSocketTCPClientRunnable(private val host: String,
     }
 
     private fun doOnError(state: ClientState, packet: Packet? = null, error: Throwable? = null) {
-        mCallback?.onError(state, packet, error)
+        safeCall { mCallback?.onError(state, packet, error) }
     }
 
     private fun clearPacketQueue() {
@@ -76,7 +75,7 @@ class NIOSocketTCPClientRunnable(private val host: String,
             mSocketChanel.configureBlocking(false)
             mSocketChanel.register(mSelector, SelectionKey.OP_READ)
             isConnected.set(true)
-            mCallback?.onConnected()
+            safeCall { mCallback?.onConnected() }
             true
         } catch (e: Throwable) {
             doOnError(ClientState.CONNECTING, error = e)
@@ -99,7 +98,7 @@ class NIOSocketTCPClientRunnable(private val host: String,
         }
         mIsSocketInit = false
         mIsSelectorInit = false
-        mCallback?.onDisconnected()
+        safeCall { mCallback?.onDisconnected() }
         mCallback = null
     }
 
@@ -125,7 +124,8 @@ class NIOSocketTCPClientRunnable(private val host: String,
         if (!sendingItem.buffer.hasRemaining()) {
             sendingItem.buffer.clear()
             mCurrentSendingItem = null
-            mCallback?.onPacketSent(sendingItem.packet)
+            val packet = sendingItem.packet
+            safeCall { mCallback?.onPacketSent(packet) }
         }
         return true
     }
@@ -145,7 +145,7 @@ class NIOSocketTCPClientRunnable(private val host: String,
                         packetsData.forEach {
                             try {
                                 val packet = packetSerializer.deSerialize(it)
-                                mCallback?.onPacketReceived(packet)
+                                safeCall { mCallback?.onPacketReceived(packet) }
                             } catch (e: Throwable) {
                                 doOnError(ClientState.RECEIVING, error = e)
                             }

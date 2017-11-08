@@ -1,4 +1,4 @@
-package com.alexdeww.niosockettcpclientlib.common
+package com.alexdeww.niosockettcpclientlib
 
 enum class ClientState {
     CONNECTING,

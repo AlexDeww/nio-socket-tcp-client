@@ -1,8 +1,6 @@
 package com.alexdeww.niosockettcpclientlib
 
-import com.alexdeww.niosockettcpclientlib.common.*
 import com.alexdeww.niosockettcpclientlib.exception.AlreadyConnected
-import com.alexdeww.niosockettcpclientlib.internal.NIOSocketTCPClientRunnable
 
 class NIOSocketTCPClient(val host: String,
                          val port: Int,

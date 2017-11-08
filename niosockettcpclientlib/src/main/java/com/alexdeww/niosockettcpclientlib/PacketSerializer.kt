@@ -1,4 +1,4 @@
-package com.alexdeww.niosockettcpclientlib.common
+package com.alexdeww.niosockettcpclientlib
 
 interface PacketSerializer {
     fun serialize(packet: Packet): ByteArray
