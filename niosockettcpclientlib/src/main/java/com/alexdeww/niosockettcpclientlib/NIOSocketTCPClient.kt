@@ -69,11 +69,14 @@ class NIOSocketTCPClient(val host: String,
 
     fun forceDisconnect() {
         synchronized(clearLock) {
-            mWorkRunnable?.removeCallback()
-            mWorkThread?.interrupt()
-            mWorkRunnable?.wakeupSelector()
-            mWorkThread = null
-            mWorkRunnable = null
+            if (mWorkRunnable != null && mWorkThread != null) {
+                mWorkRunnable?.removeCallback()
+                mWorkThread?.interrupt()
+                mWorkRunnable?.wakeupSelector()
+                mWorkThread = null
+                mWorkRunnable = null
+                callbackEvents.onDisconnected(this@NIOSocketTCPClient)
+            }
         }
     }
 
