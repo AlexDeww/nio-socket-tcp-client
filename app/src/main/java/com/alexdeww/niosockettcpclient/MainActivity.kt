@@ -11,24 +11,24 @@ class MainActivity : AppCompatActivity() {
     private val mTcpClient = NIOSocketTCPClient("192.168.0.3", 43567, false,
             object : PacketProtocol {
                 override fun encode(packetData: ByteArray): ByteArray {
-                    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                    return packetData
                 }
 
                 override fun decode(rawData: ByteArray): List<ByteArray> {
-                    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                    return arrayListOf()
                 }
 
                 override fun clearBuffers() {
-                    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+
                 }
             },
             object : PacketSerializer {
                 override fun serialize(packet: Packet): ByteArray {
-                    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                    return "1234567890".toByteArray()
                 }
 
                 override fun deSerialize(buffer: ByteArray): Packet {
-                    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+                    TODO("mot impl")
                 }
             },
             object : CallbackEvents {
@@ -64,6 +64,10 @@ class MainActivity : AppCompatActivity() {
 
         button2.setOnClickListener {
             mTcpClient.disconnect()
+        }
+
+        button3.setOnClickListener {
+            mTcpClient.sendPacket(object : Packet() {  })
         }
     }
 }

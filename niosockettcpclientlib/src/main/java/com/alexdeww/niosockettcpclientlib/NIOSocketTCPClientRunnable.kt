@@ -71,6 +71,7 @@ internal class NIOSocketTCPClientRunnable(private val host: String,
             mSocketChanel.socket().keepAlive = keepAlive
             mSocketChanel.socket().sendBufferSize = BUFFER_SIZE
             mSocketChanel.socket().receiveBufferSize = BUFFER_SIZE
+            mSocketChanel.socket().tcpNoDelay = true
             mSocketChanel.socket().connect(InetSocketAddress(host, port), 5000)
             mSocketChanel.configureBlocking(false)
             mSocketChanel.register(mSelector, SelectionKey.OP_READ)
