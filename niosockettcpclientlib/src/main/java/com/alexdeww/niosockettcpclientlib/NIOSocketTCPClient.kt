@@ -2,17 +2,18 @@ package com.alexdeww.niosockettcpclientlib
 
 import com.alexdeww.niosockettcpclientlib.exception.AlreadyConnected
 
-class NIOSocketTCPClient(val host: String,
-                         val port: Int,
-                         val keepAlive: Boolean,
-                         private val packetProtocol: PacketProtocol,
-                         private val packetSerializer: PacketSerializer,
-                         private val callbackEvents: CallbackEvents) {
+class NIOSocketTCPClient<in PACKET>(
+        val host: String,
+        val port: Int,
+        val keepAlive: Boolean,
+        private val packetProtocol: PacketProtocol<PACKET>,
+        private val callbackEvents: CallbackEvents<PACKET>
+) {
 
     private val clearLock = Object()
     private var mWorkThread: Thread? = null
-    private var mWorkRunnable: NIOSocketTCPClientRunnable? = null
-    private val mClientCallback = object : NIOSocketTCPClientRunnable.Callback {
+    private var mWorkRunnable: NIOSocketTCPClientRunnable<PACKET>? = null
+    private val mClientCallback = object : NIOSocketTCPClientRunnable.Callback<PACKET> {
         override fun onConnected() {
             callbackEvents.onConnected(this@NIOSocketTCPClient)
         }
@@ -25,15 +26,15 @@ class NIOSocketTCPClient(val host: String,
             callbackEvents.onDisconnected(this@NIOSocketTCPClient)
         }
 
-        override fun onPacketSent(packet: Packet) {
+        override fun onPacketSent(packet: PACKET) {
             callbackEvents.onPacketSent(this@NIOSocketTCPClient, packet)
         }
 
-        override fun onPacketReceived(packet: Packet) {
+        override fun onPacketReceived(packet: PACKET) {
             callbackEvents.onPacketReceived(this@NIOSocketTCPClient, packet)
         }
 
-        override fun onError(state: ClientState, packet: Packet?, error: Throwable?) {
+        override fun onError(state: ClientState, packet: PACKET?, error: Throwable?) {
             callbackEvents.onError(this@NIOSocketTCPClient, state, packet, error)
         }
     }
@@ -45,7 +46,7 @@ class NIOSocketTCPClient(val host: String,
 
         synchronized(clearLock) {
             try {
-                mWorkRunnable = NIOSocketTCPClientRunnable(host, port, keepAlive, packetProtocol, packetSerializer)
+                mWorkRunnable = NIOSocketTCPClientRunnable(host, port, keepAlive, packetProtocol)
                 mWorkRunnable?.registrateCallback(mClientCallback)
                 mWorkThread = Thread(mWorkRunnable)
                 mWorkThread?.start()
@@ -78,7 +79,7 @@ class NIOSocketTCPClient(val host: String,
         }
     }
 
-    fun sendPacket(packet: Packet): Boolean {
+    fun sendPacket(packet: PACKET): Boolean {
         return if (isConnected) {
             mWorkRunnable?.addPacketToSendQueue(packet)
             true

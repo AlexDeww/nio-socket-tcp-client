@@ -1,15 +1,15 @@
 package com.alexdeww.niosockettcpclientlib
 
-interface CallbackEvents {
+interface CallbackEvents<PACKET> {
 
-    fun onConnected(client: NIOSocketTCPClient)
+    fun onConnected(client: NIOSocketTCPClient<PACKET>)
 
-    fun onDisconnected(client: NIOSocketTCPClient)
+    fun onDisconnected(client: NIOSocketTCPClient<PACKET>)
 
-    fun onPacketSent(client: NIOSocketTCPClient, packet: Packet)
+    fun onPacketSent(client: NIOSocketTCPClient<PACKET>, packet: PACKET)
 
-    fun onPacketReceived(client: NIOSocketTCPClient, packet: Packet)
+    fun onPacketReceived(client: NIOSocketTCPClient<PACKET>, packet: PACKET)
 
-    fun onError(client: NIOSocketTCPClient, clientState: ClientState, packet: Packet?, error: Throwable?)
+    fun onError(client: NIOSocketTCPClient<PACKET>, clientState: ClientState, packet: PACKET?, error: Throwable?)
 
 }

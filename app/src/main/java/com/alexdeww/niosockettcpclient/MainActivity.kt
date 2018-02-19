@@ -9,46 +9,31 @@ import kotlinx.android.synthetic.main.activity_main.*
 class MainActivity : AppCompatActivity() {
 
     private val mTcpClient = NIOSocketTCPClient("192.168.0.3", 43567, false,
-            object : PacketProtocol {
-                override fun encode(packetData: ByteArray): ByteArray {
-                    return packetData
-                }
+            object : PacketProtocol<String> {
+                override fun encode(packet: String): ByteArray = packet.toByteArray()
 
-                override fun decode(rawData: ByteArray): List<ByteArray> {
-                    return arrayListOf()
-                }
+                override fun decode(rawData: ByteArray): List<String> = arrayListOf(rawData.toString())
 
-                override fun clearBuffers() {
-
-                }
+                override fun clearBuffers() {}
             },
-            object : PacketSerializer {
-                override fun serialize(packet: Packet): ByteArray {
-                    return "1234567890".toByteArray()
-                }
-
-                override fun deSerialize(buffer: ByteArray): Packet {
-                    TODO("mot impl")
-                }
-            },
-            object : CallbackEvents {
-                override fun onConnected(client: NIOSocketTCPClient) {
+            object : CallbackEvents<String> {
+                override fun onConnected(client: NIOSocketTCPClient<String>) {
                     Log.i("MainActivity", "onConnected")
                 }
 
-                override fun onDisconnected(client: NIOSocketTCPClient) {
+                override fun onDisconnected(client: NIOSocketTCPClient<String>) {
                     Log.i("MainActivity", "onDisconnected")
                 }
 
-                override fun onPacketSent(client: NIOSocketTCPClient, packet: Packet) {
-                    Log.i("MainActivity", "onPacketSent")
+                override fun onPacketSent(client: NIOSocketTCPClient<String>, packet: String) {
+                    Log.i("MainActivity", "onPacketSent: $packet")
                 }
 
-                override fun onPacketReceived(client: NIOSocketTCPClient, packet: Packet) {
-                    Log.i("MainActivity", "onPacketReceived")
+                override fun onPacketReceived(client: NIOSocketTCPClient<String>, packet: String) {
+                    Log.i("MainActivity", "onPacketReceived: $packet")
                 }
 
-                override fun onError(client: NIOSocketTCPClient, clientState: ClientState, packet: Packet?, error: Throwable?) {
+                override fun onError(client: NIOSocketTCPClient<String>, clientState: ClientState, packet: String?, error: Throwable?) {
                     Log.e("MainActivity", "onError, $error")
                     error?.printStackTrace()
                 }
@@ -67,7 +52,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         button3.setOnClickListener {
-            mTcpClient.sendPacket(object : Packet() {  })
+            mTcpClient.sendPacket("test!!!$%%#$3")
         }
     }
 }

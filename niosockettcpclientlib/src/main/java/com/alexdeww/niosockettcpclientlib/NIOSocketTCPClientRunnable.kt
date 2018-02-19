@@ -10,37 +10,38 @@ import java.util.Queue
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
-internal class NIOSocketTCPClientRunnable(private val host: String,
-                                          private val port: Int,
-                                          private val keepAlive: Boolean,
-                                          private val packetProtocol: PacketProtocol,
-                                          private val packetSerializer: PacketSerializer) : Runnable {
+internal class NIOSocketTCPClientRunnable<PACKET>(
+        private val host: String,
+        private val port: Int,
+        private val keepAlive: Boolean,
+        private val packetProtocol: PacketProtocol<PACKET>
+) : Runnable {
 
     companion object {
         private const val TAG = "NIOSocketTCPClientR"
         private const val BUFFER_SIZE = 8192
     }
 
-    interface Callback {
+    interface Callback<in PACKET> {
         fun onConnected()
         fun onDisconnected()
-        fun onPacketSent(packet: Packet)
-        fun onPacketReceived(packet: Packet)
-        fun onError(state: ClientState, packet: Packet?, error: Throwable? = null)
+        fun onPacketSent(packet: PACKET)
+        fun onPacketReceived(packet: PACKET)
+        fun onError(state: ClientState, packet: PACKET?, error: Throwable? = null)
     }
 
-    private class SendingItem(val packet: Packet, val buffer: ByteBuffer)
+    private class SendingItem<out PACKET>(val packet: PACKET, val buffer: ByteBuffer)
 
     val isConnected = AtomicBoolean(false)
     private lateinit var mSocketChanel: SocketChannel
     private lateinit var mSelector: Selector
     private val mReceiveBuffer = ByteBuffer.allocate(BUFFER_SIZE)
-    private var mSendPacketQueue: Queue<Packet> = ConcurrentLinkedQueue()
-    private var mCurrentSendingItem: SendingItem? = null
+    private var mSendPacketQueue: Queue<PACKET> = ConcurrentLinkedQueue()
+    private var mCurrentSendingItem: SendingItem<PACKET>? = null
     private val mHavePacketToSend = AtomicBoolean(false)
     private var mIsSocketInit: Boolean = false
     private var mIsSelectorInit: Boolean = false
-    private var mCallback: Callback? = null
+    private var mCallback: Callback<PACKET>? = null
 
     private inline fun safeCall(block: () -> Unit) {
         try {
@@ -50,7 +51,7 @@ internal class NIOSocketTCPClientRunnable(private val host: String,
         }
     }
 
-    private fun doOnError(state: ClientState, packet: Packet? = null, error: Throwable? = null) {
+    private fun doOnError(state: ClientState, packet: PACKET? = null, error: Throwable? = null) {
         safeCall { mCallback?.onError(state, packet, error) }
     }
 
@@ -112,8 +113,7 @@ internal class NIOSocketTCPClientRunnable(private val host: String,
                 return true
             }
             try {
-                sendingItem = SendingItem(packet,
-                        ByteBuffer.wrap(packetProtocol.encode(packetSerializer.serialize(packet))))
+                sendingItem = SendingItem(packet, ByteBuffer.wrap(packetProtocol.encode(packet)))
                 mCurrentSendingItem = sendingItem
             } catch (e: Throwable) {
                 doOnError(ClientState.SENDING, packet, e)
@@ -141,17 +141,8 @@ internal class NIOSocketTCPClientRunnable(private val host: String,
                 try {
                     val ba = ByteArray(mReceiveBuffer.remaining())
                     mReceiveBuffer.get(ba)
-                    val packetsData = packetProtocol.decode(ba)
-                    if (packetsData.isNotEmpty()) {
-                        packetsData.forEach {
-                            try {
-                                val packet = packetSerializer.deSerialize(it)
-                                safeCall { mCallback?.onPacketReceived(packet) }
-                            } catch (e: Throwable) {
-                                doOnError(ClientState.RECEIVING, error = e)
-                            }
-                        }
-                    }
+                    val packets = packetProtocol.decode(ba)
+                    packets.forEach { safeCall { mCallback?.onPacketReceived(it) } }
                 } catch (e: Throwable) {
                     doOnError(ClientState.RECEIVING, error = e)
                 }
@@ -176,7 +167,7 @@ internal class NIOSocketTCPClientRunnable(private val host: String,
         return true
     }
 
-    fun registrateCallback(callback: Callback) {
+    fun registrateCallback(callback: Callback<PACKET>) {
         mCallback = callback
     }
 
@@ -188,7 +179,7 @@ internal class NIOSocketTCPClientRunnable(private val host: String,
         if (isConnected.get()) mSelector.wakeup()
     }
 
-    fun addPacketToSendQueue(packet: Packet) {
+    fun addPacketToSendQueue(packet: PACKET) {
         mSendPacketQueue.add(packet)
         mHavePacketToSend.set(true)
         wakeupSelector()

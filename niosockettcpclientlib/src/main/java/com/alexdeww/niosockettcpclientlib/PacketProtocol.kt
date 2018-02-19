@@ -1,7 +1,7 @@
 package com.alexdeww.niosockettcpclientlib
 
-interface PacketProtocol {
-    fun encode(packetData: ByteArray): ByteArray
-    fun decode(rawData: ByteArray): List<ByteArray>
+interface PacketProtocol<PACKET> {
+    fun encode(packet: PACKET): ByteArray
+    fun decode(rawData: ByteArray): List<PACKET>
     fun clearBuffers()
 }
