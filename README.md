@@ -16,6 +16,6 @@ allprojects {
 Add to your app module build.gradle
 ```gradle
 dependencies {
-        compile 'com.github.alexdeww:nio-socket-tcp-client:1.1'
+        compile 'com.github.alexdeww:nio-socket-tcp-client:3.0.2'
 }
 ```
