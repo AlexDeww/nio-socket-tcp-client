@@ -2,58 +2,63 @@ package com.alexdeww.niosockettcpclientlib
 
 import com.alexdeww.niosockettcpclientlib.exception.AlreadyConnected
 
-class NIOSocketTCPClient<in PACKET>(
+class NIOSocketTCPClient<DATA>(
         val host: String,
         val port: Int,
         val keepAlive: Boolean,
-        private val packetProtocol: PacketProtocol<PACKET>,
-        private val callbackEvents: CallbackEvents<PACKET>
+        private val socketCallbackEvents: NIOSocketCallbackEvents<DATA>
 ) {
 
     private val clearLock = Object()
-    private var mWorkThread: Thread? = null
-    private var mWorkRunnable: NIOSocketTCPClientRunnable<PACKET>? = null
-    private val mClientCallback = object : NIOSocketTCPClientRunnable.Callback<PACKET> {
+    private var workThread: Thread? = null
+    private var socketRunnable: NIOSocketTCPClientRunnable<DATA>? = null
+    private val socketClientCallback = object : NIOSocketTCPClientRunnable.Callback<DATA> {
         override fun onConnected() {
-            callbackEvents.onConnected(this@NIOSocketTCPClient)
+            socketCallbackEvents.onConnected(this@NIOSocketTCPClient)
         }
 
         override fun onDisconnected() {
             synchronized(clearLock) {
-                mWorkThread = null
-                mWorkRunnable = null
+                workThread = null
+                socketRunnable = null
             }
-            callbackEvents.onDisconnected(this@NIOSocketTCPClient)
+            socketCallbackEvents.onDisconnected(this@NIOSocketTCPClient)
         }
 
-        override fun onPacketSent(packet: PACKET) {
-            callbackEvents.onPacketSent(this@NIOSocketTCPClient, packet)
+        override fun onPrepareDataSend(data: DATA): ByteArray =
+                socketCallbackEvents.onPrepareDataSend(this@NIOSocketTCPClient, data)
+
+        override fun onDataSent(data: DATA) {
+            socketCallbackEvents.onDataSent(this@NIOSocketTCPClient, data)
         }
 
-        override fun onPacketReceived(packet: PACKET) {
-            callbackEvents.onPacketReceived(this@NIOSocketTCPClient, packet)
+        override fun onSrcDataReceived(srcData: ByteArray): List<DATA> =
+                socketCallbackEvents.onSrcDataReceived(this@NIOSocketTCPClient, srcData)
+
+        override fun onDataReceived(data: DATA) {
+            socketCallbackEvents.onDataReceived(this@NIOSocketTCPClient, data)
         }
 
-        override fun onError(state: ClientState, packet: PACKET?, error: Throwable?) {
-            callbackEvents.onError(this@NIOSocketTCPClient, state, packet, error)
+        override fun onError(state: NIOSocketClientState, data: DATA?, error: Throwable?) {
+            socketCallbackEvents.onError(this@NIOSocketTCPClient, state, data, error)
         }
     }
 
-    val isConnected: Boolean get() = mWorkRunnable?.isConnected?.get() ?: false
+    val isConnected: Boolean get() = socketRunnable?.isConnected?.get() ?: false
 
     fun connect() {
-        if (mWorkThread != null) throw AlreadyConnected()
+        if (workThread != null) throw AlreadyConnected()
 
         synchronized(clearLock) {
             try {
-                mWorkRunnable = NIOSocketTCPClientRunnable(host, port, keepAlive, packetProtocol)
-                mWorkRunnable?.registrateCallback(mClientCallback)
-                mWorkThread = Thread(mWorkRunnable)
-                mWorkThread?.start()
+                socketRunnable = NIOSocketTCPClientRunnable(host, port, keepAlive)
+                socketRunnable?.registrateCallback(socketClientCallback)
+                workThread = Thread(socketRunnable)
+                workThread?.start()
             } catch (e: Throwable) {
-                mWorkRunnable?.removeCallback()
-                mWorkThread = null
-                mWorkRunnable = null
+                socketRunnable?.removeCallback()
+                workThread = null
+                socketRunnable = null
                 throw e
             }
         }
@@ -61,29 +66,27 @@ class NIOSocketTCPClient<in PACKET>(
 
     fun disconnect() {
         synchronized(clearLock) {
-            mWorkThread?.interrupt()
-            mWorkRunnable?.wakeupSelector()
+            workThread?.interrupt()
+            socketRunnable?.wakeupSelector()
         }
     }
 
     fun forceDisconnect() {
         synchronized(clearLock) {
-            if (mWorkRunnable != null && mWorkThread != null) {
-                mWorkRunnable?.removeCallback()
-                mWorkThread?.interrupt()
-                mWorkRunnable?.wakeupSelector()
-                callbackEvents.onDisconnected(this@NIOSocketTCPClient)
+            if (socketRunnable != null && workThread != null) {
+                socketRunnable?.removeCallback()
+                workThread?.interrupt()
+                socketRunnable?.wakeupSelector()
+                socketCallbackEvents.onDisconnected(this@NIOSocketTCPClient)
             }
-            mWorkThread = null
-            mWorkRunnable = null
+            workThread = null
+            socketRunnable = null
         }
     }
 
-    fun sendPacket(packet: PACKET): Boolean {
-        return if (isConnected) {
-            mWorkRunnable?.addPacketToSendQueue(packet)
-            true
-        } else false
-    }
+    fun sendData(data: DATA): Boolean = if (isConnected) {
+        socketRunnable?.addToSendQueue(data)
+        true
+    } else false
 
 }

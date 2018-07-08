@@ -1,6 +1,6 @@
 package com.alexdeww.niosockettcpclientlib
 
-enum class ClientState {
+enum class NIOSocketClientState {
     CONNECTING,
     DISCONNECTING,
     SENDING,

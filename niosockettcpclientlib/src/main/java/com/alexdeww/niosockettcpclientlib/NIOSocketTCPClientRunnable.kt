@@ -10,11 +10,10 @@ import java.util.Queue
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
-internal class NIOSocketTCPClientRunnable<PACKET>(
+internal class NIOSocketTCPClientRunnable<DATA>(
         private val host: String,
         private val port: Int,
-        private val keepAlive: Boolean,
-        private val packetProtocol: PacketProtocol<PACKET>
+        private val keepAlive: Boolean
 ) : Runnable {
 
     companion object {
@@ -22,26 +21,74 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
         private const val BUFFER_SIZE = 8192
     }
 
-    interface Callback<in PACKET> {
+    interface Callback<DATA> {
         fun onConnected()
         fun onDisconnected()
-        fun onPacketSent(packet: PACKET)
-        fun onPacketReceived(packet: PACKET)
-        fun onError(state: ClientState, packet: PACKET?, error: Throwable? = null)
+        fun onPrepareDataSend(data: DATA): ByteArray
+        fun onDataSent(data: DATA)
+        fun onSrcDataReceived(srcData: ByteArray): List<DATA>
+        fun onDataReceived(data: DATA)
+        fun onError(state: NIOSocketClientState, data: DATA?, error: Throwable? = null)
     }
 
-    private class SendingItem<out PACKET>(val packet: PACKET, val buffer: ByteBuffer)
+    private class SendingItem<DATA>(
+            val data: DATA,
+            val buffer: ByteBuffer
+    )
 
-    val isConnected = AtomicBoolean(false)
     private lateinit var mSocketChanel: SocketChannel
     private lateinit var mSelector: Selector
     private val mReceiveBuffer = ByteBuffer.allocate(BUFFER_SIZE)
-    private var mSendPacketQueue: Queue<PACKET> = ConcurrentLinkedQueue()
-    private var mCurrentSendingItem: SendingItem<PACKET>? = null
-    private val mHavePacketToSend = AtomicBoolean(false)
+    private var mSendDataQueue: Queue<DATA> = ConcurrentLinkedQueue()
+    private var mCurrentSendingItem: SendingItem<DATA>? = null
+    private val mHaveDataToSend = AtomicBoolean(false)
     private var mIsSocketInit: Boolean = false
     private var mIsSelectorInit: Boolean = false
-    private var mCallback: Callback<PACKET>? = null
+    private var mCallback: Callback<DATA>? = null
+
+    val isConnected = AtomicBoolean(false)
+
+    fun registrateCallback(callback: Callback<DATA>) {
+        mCallback = callback
+    }
+
+    fun removeCallback() {
+        mCallback = null
+    }
+
+    fun wakeupSelector() {
+        if (isConnected.get()) mSelector.wakeup()
+    }
+
+    fun addToSendQueue(data: DATA) {
+        mSendDataQueue.add(data)
+        mHaveDataToSend.set(true)
+        wakeupSelector()
+    }
+
+    override fun run() {
+        Log.i(TAG, "$this started")
+        try {
+            if (!openConnection()) return
+
+            while (!Thread.interrupted() && mSocketChanel.isOpen) {
+
+                if (mHaveDataToSend.getAndSet(false)) {
+                    val key = mSocketChanel.keyFor(mSelector)
+                    key.interestOps(key.interestOps() or SelectionKey.OP_WRITE)
+                }
+
+                if (mSelector.select() > 0 && !processKeys(mSelector.selectedKeys(), mSocketChanel)) break
+
+            }
+
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        } finally {
+            closeConnection()
+            Log.i(TAG, "$this stopped")
+        }
+    }
 
     private inline fun safeCall(block: () -> Unit) {
         try {
@@ -51,12 +98,12 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
         }
     }
 
-    private fun doOnError(state: ClientState, packet: PACKET? = null, error: Throwable? = null) {
-        safeCall { mCallback?.onError(state, packet, error) }
+    private fun doOnError(state: NIOSocketClientState, data: DATA? = null, error: Throwable? = null) {
+        safeCall { mCallback?.onError(state, data, error) }
     }
 
     private fun clearPacketQueue() {
-        mSendPacketQueue.clear()
+        mSendDataQueue.clear()
     }
 
     private fun openConnection(): Boolean {
@@ -80,7 +127,7 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
             safeCall { mCallback?.onConnected() }
             true
         } catch (e: Throwable) {
-            doOnError(ClientState.CONNECTING, error = e)
+            doOnError(NIOSocketClientState.CONNECTING, error = e)
             false
         }
     }
@@ -92,11 +139,10 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
             mCurrentSendingItem?.buffer?.clear()
             mCurrentSendingItem = null
             mReceiveBuffer.clear()
-            safeCall { packetProtocol.clearBuffers() }
             if (mIsSocketInit) safeCall { mSocketChanel.close() }
             if (mIsSelectorInit) safeCall { mSelector.close() }
         } catch (e: Throwable) {
-            doOnError(ClientState.DISCONNECTING, error = e)
+            doOnError(NIOSocketClientState.DISCONNECTING, error = e)
         }
         mIsSocketInit = false
         mIsSelectorInit = false
@@ -107,16 +153,17 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
     private fun processWrite(key: SelectionKey, socketChanel: SocketChannel): Boolean {
         var sendingItem = mCurrentSendingItem
         if (sendingItem == null) {
-            val packet = mSendPacketQueue.poll()
-            if (packet == null) {
+            val data = mSendDataQueue.poll()
+            if (data == null) {
                 key.interestOps(key.interestOps() xor SelectionKey.OP_WRITE)
                 return true
             }
             try {
-                sendingItem = SendingItem(packet, ByteBuffer.wrap(packetProtocol.encode(packet)))
+                val ba = mCallback?.onPrepareDataSend(data) ?: return true
+                sendingItem = SendingItem(data, ByteBuffer.wrap(ba))
                 mCurrentSendingItem = sendingItem
             } catch (e: Throwable) {
-                doOnError(ClientState.SENDING, packet, e)
+                doOnError(NIOSocketClientState.SENDING, data, e)
                 return true
             }
         }
@@ -125,8 +172,7 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
         if (!sendingItem.buffer.hasRemaining()) {
             sendingItem.buffer.clear()
             mCurrentSendingItem = null
-            val packet = sendingItem.packet
-            safeCall { mCallback?.onPacketSent(packet) }
+            safeCall { mCallback?.onDataSent(sendingItem.data) }
         }
         return true
     }
@@ -141,10 +187,9 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
                 try {
                     val ba = ByteArray(mReceiveBuffer.remaining())
                     mReceiveBuffer.get(ba)
-                    val packets = packetProtocol.decode(ba)
-                    packets.forEach { safeCall { mCallback?.onPacketReceived(it) } }
+                    safeCall { mCallback?.onSrcDataReceived(ba)?.forEach { safeCall { mCallback?.onDataReceived(it) } } }
                 } catch (e: Throwable) {
-                    doOnError(ClientState.RECEIVING, error = e)
+                    doOnError(NIOSocketClientState.RECEIVING, error = e)
                 }
                 mReceiveBuffer.clear()
                 return true
@@ -167,45 +212,4 @@ internal class NIOSocketTCPClientRunnable<PACKET>(
         return true
     }
 
-    fun registrateCallback(callback: Callback<PACKET>) {
-        mCallback = callback
-    }
-
-    fun removeCallback() {
-        mCallback = null
-    }
-
-    fun wakeupSelector() {
-        if (isConnected.get()) mSelector.wakeup()
-    }
-
-    fun addPacketToSendQueue(packet: PACKET) {
-        mSendPacketQueue.add(packet)
-        mHavePacketToSend.set(true)
-        wakeupSelector()
-    }
-
-    override fun run() {
-        Log.i(TAG, "$this started")
-        try {
-            if (!openConnection()) return
-
-            while (!Thread.interrupted() && mSocketChanel.isOpen) {
-
-                if (mHavePacketToSend.getAndSet(false)) {
-                    val key = mSocketChanel.keyFor(mSelector)
-                    key.interestOps(key.interestOps() or SelectionKey.OP_WRITE)
-                }
-
-                if (mSelector.select() > 0 && !processKeys(mSelector.selectedKeys(), mSocketChanel)) break
-
-            }
-
-        } catch (e: Throwable) {
-            e.printStackTrace()
-        } finally {
-            closeConnection()
-            Log.i(TAG, "$this stopped")
-        }
-    }
 }
