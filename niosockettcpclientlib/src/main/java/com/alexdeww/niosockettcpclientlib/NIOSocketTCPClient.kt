@@ -41,7 +41,7 @@ open class NIOSocketTCPClient<PACKET>(
 
     override fun onError(socket: NIOTcpSocketWorker, state: NIOSocketWorkerState, error: Throwable, data: ByteArray?) {
         super.onError(socket, state, error, data)
-        clientListener.onError(this, error)
+        clientListener.onError(this, state, error)
     }
 
     open fun sendPacket(packet: PACKET, operationResult: NIOSocketOperationResult): Boolean =

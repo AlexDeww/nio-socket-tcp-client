@@ -1,5 +1,6 @@
 package com.alexdeww.niosockettcpclientlib.core
 
+import com.alexdeww.niosockettcpclientlib.exception.Disconnected
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.SelectionKey
@@ -137,6 +138,7 @@ class NIOTcpSocketWorker(
 
     private fun closeConnection() {
         try {
+            sendDataQueue.forEach { safeCall { it.operationResult?.onError(Disconnected()) } }
             clear()
             if (isSocketInit) safeCall { socketChanel.close() }
             if (isSelectorInit) safeCall { selector.close() }
