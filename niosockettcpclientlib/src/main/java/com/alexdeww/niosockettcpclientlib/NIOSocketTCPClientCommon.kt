@@ -45,6 +45,7 @@ open class NIOSocketTCPClientCommon(
         synchronized(clearLock) {
             try {
                 socketWorker = NIOTcpSocketWorker(host, port, keepAlive, bufferSize, connectionTimeout)
+                socketWorker?.registerListener(this)
                 workThread = Thread(socketWorker)
                 workThread?.start()
             } catch (e: Throwable) {
