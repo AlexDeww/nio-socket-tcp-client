@@ -1,92 +1,60 @@
 package com.alexdeww.niosockettcpclientlib
 
-import com.alexdeww.niosockettcpclientlib.exception.AlreadyConnected
+import com.alexdeww.niosockettcpclientlib.additional.NIOSocketPacketProtocol
+import com.alexdeww.niosockettcpclientlib.additional.NIOSocketSerializer
+import com.alexdeww.niosockettcpclientlib.core.NIOSocketOperationResult
+import com.alexdeww.niosockettcpclientlib.core.NIOSocketWorkerState
+import com.alexdeww.niosockettcpclientlib.core.NIOTcpSocketWorker
+import com.alexdeww.niosockettcpclientlib.core.safeCall
 
-class NIOSocketTCPClient<DATA>(
-        val host: String,
-        val port: Int,
-        val keepAlive: Boolean,
-        private val socketCallbackEvents: NIOSocketCallbackEvents<DATA>
-) {
+open class NIOSocketTCPClient<PACKET>(
+        host: String,
+        port: Int,
+        keepAlive: Boolean,
+        bufferSize: Int,
+        connectionTimeout: Int,
+        protected val protocol: NIOSocketPacketProtocol,
+        protected val serializer: NIOSocketSerializer<PACKET>,
+        protected val clientListener: NIOSocketTcpClientListener<PACKET>
+) : NIOSocketTCPClientCommon(host, port, keepAlive, bufferSize, connectionTimeout) {
 
-    private val clearLock = Object()
-    private var workThread: Thread? = null
-    private var socketRunnable: NIOSocketTCPClientRunnable<DATA>? = null
-    private val socketClientCallback = object : NIOSocketTCPClientRunnable.Callback<DATA> {
-        override fun onConnected() {
-            socketCallbackEvents.onConnected(this@NIOSocketTCPClient)
-        }
-
-        override fun onDisconnected() {
-            synchronized(clearLock) {
-                workThread = null
-                socketRunnable = null
-            }
-            socketCallbackEvents.onDisconnected(this@NIOSocketTCPClient)
-        }
-
-        override fun onPrepareDataSend(data: DATA): ByteArray =
-                socketCallbackEvents.onPrepareDataSend(this@NIOSocketTCPClient, data)
-
-        override fun onDataSent(data: DATA) {
-            socketCallbackEvents.onDataSent(this@NIOSocketTCPClient, data)
-        }
-
-        override fun onSrcDataReceived(srcData: ByteArray): List<DATA> =
-                socketCallbackEvents.onSrcDataReceived(this@NIOSocketTCPClient, srcData)
-
-        override fun onDataReceived(data: DATA) {
-            socketCallbackEvents.onDataReceived(this@NIOSocketTCPClient, data)
-        }
-
-        override fun onError(state: NIOSocketClientState, data: DATA?, error: Throwable?) {
-            socketCallbackEvents.onError(this@NIOSocketTCPClient, state, data, error)
-        }
+    override fun onConnected(socket: NIOTcpSocketWorker) {
+        safeCall { protocol.clearBuffers() }
+        super.onConnected(socket)
+        clientListener.onConnected(this)
     }
 
-    val isConnected: Boolean get() = socketRunnable?.isConnected?.get() ?: false
-
-    fun connect() {
-        if (workThread != null) throw AlreadyConnected()
-
-        synchronized(clearLock) {
-            try {
-                socketRunnable = NIOSocketTCPClientRunnable(host, port, keepAlive)
-                socketRunnable?.registrateCallback(socketClientCallback)
-                workThread = Thread(socketRunnable)
-                workThread?.start()
-            } catch (e: Throwable) {
-                socketRunnable?.removeCallback()
-                workThread = null
-                socketRunnable = null
-                throw e
-            }
-        }
+    override fun onDisconnected(socket: NIOTcpSocketWorker) {
+        safeCall { protocol.clearBuffers() }
+        super.onDisconnected(socket)
+        clientListener.onDisconnected(this)
     }
 
-    fun disconnect() {
-        synchronized(clearLock) {
-            workThread?.interrupt()
-            socketRunnable?.wakeupSelector()
-        }
+    override fun onDataReceived(socket: NIOTcpSocketWorker, data: ByteArray) {
+        super.onDataReceived(socket, data)
+         try {
+             processData(data)
+         } catch (e: Throwable) {
+             onError(socket, NIOSocketWorkerState.RECEIVING, e, data)
+         }
     }
 
-    fun forceDisconnect() {
-        synchronized(clearLock) {
-            if (socketRunnable != null && workThread != null) {
-                socketRunnable?.removeCallback()
-                workThread?.interrupt()
-                socketRunnable?.wakeupSelector()
-                socketCallbackEvents.onDisconnected(this@NIOSocketTCPClient)
-            }
-            workThread = null
-            socketRunnable = null
-        }
+    override fun onError(socket: NIOTcpSocketWorker, state: NIOSocketWorkerState, error: Throwable, data: ByteArray?) {
+        super.onError(socket, state, error, data)
+        clientListener.onError(this, error)
     }
 
-    fun sendData(data: DATA): Boolean = if (isConnected) {
-        socketRunnable?.addToSendQueue(data)
-        true
-    } else false
+    open fun sendPacket(packet: PACKET, operationResult: NIOSocketOperationResult): Boolean =
+            write(protocol.encode(serializer.serialize(packet)), operationResult)
+
+    protected open fun doOnPacketReceived(packet: PACKET) {
+        clientListener.onPacketReceived(this, packet)
+    }
+
+    protected open fun processData(data: ByteArray) {
+        protocol.decode(data)
+                .map { serializer.deSerialize(it) }
+                .forEach { doOnPacketReceived(it) }
+    }
 
 }
