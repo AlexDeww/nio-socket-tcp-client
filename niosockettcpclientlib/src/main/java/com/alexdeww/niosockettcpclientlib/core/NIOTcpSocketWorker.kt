@@ -138,7 +138,7 @@ class NIOTcpSocketWorker(
 
     private fun closeConnection() {
         try {
-            sendDataQueue.forEach { safeCall { it.operationResult?.onError(Disconnected()) } }
+            sendDataQueue.toMutableList().forEach { safeCall { it.operationResult?.onError(Disconnected()) } }
             clear()
             if (isSocketInit) safeCall { socketChanel.close() }
             if (isSelectorInit) safeCall { selector.close() }
