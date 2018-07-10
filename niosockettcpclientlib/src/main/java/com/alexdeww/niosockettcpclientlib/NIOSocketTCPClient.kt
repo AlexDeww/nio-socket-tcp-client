@@ -15,19 +15,19 @@ open class NIOSocketTCPClient<PACKET>(
         connectionTimeout: Int,
         protected val protocol: NIOSocketPacketProtocol,
         protected val serializer: NIOSocketSerializer<PACKET>,
-        protected val clientListener: NIOSocketTcpClientListener<PACKET>
+        protected val clientListener: NIOSocketTcpClientListener<PACKET>? = null
 ) : NIOSocketTCPClientCommon(host, port, keepAlive, bufferSize, connectionTimeout) {
 
     override fun onConnected(socket: NIOTcpSocketWorker) {
         safeCall { protocol.clearBuffers() }
         super.onConnected(socket)
-        clientListener.onConnected(this)
+        clientListener?.onConnected(this)
     }
 
     override fun onDisconnected(socket: NIOTcpSocketWorker) {
         safeCall { protocol.clearBuffers() }
         super.onDisconnected(socket)
-        clientListener.onDisconnected(this)
+        clientListener?.onDisconnected(this)
     }
 
     override fun onDataReceived(socket: NIOTcpSocketWorker, data: ByteArray) {
@@ -41,14 +41,14 @@ open class NIOSocketTCPClient<PACKET>(
 
     override fun onError(socket: NIOTcpSocketWorker, state: NIOSocketWorkerState, error: Throwable, data: ByteArray?) {
         super.onError(socket, state, error, data)
-        clientListener.onError(this, state, error)
+        clientListener?.onError(this, state, error)
     }
 
     open fun sendPacket(packet: PACKET, operationResult: NIOSocketOperationResult): Boolean =
             write(protocol.encode(serializer.serialize(packet)), operationResult)
 
     protected open fun doOnPacketReceived(packet: PACKET) {
-        clientListener.onPacketReceived(this, packet)
+        clientListener?.onPacketReceived(this, packet)
     }
 
     protected open fun processData(data: ByteArray) {
