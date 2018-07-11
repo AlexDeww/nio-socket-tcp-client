@@ -1,9 +1,20 @@
 package com.alexdeww.niosockettcpclientlib.core
 
-interface NIOSocketOperationResult {
+import java.util.concurrent.atomic.AtomicBoolean
 
-    fun onComplete()
+abstract class NIOSocketOperationResult {
 
-    fun onError(error: Throwable)
+    private val _isCanceled = AtomicBoolean(false)
+
+    val isCanceled: Boolean
+        get() = _isCanceled.get()
+
+    abstract fun onComplete()
+
+    abstract fun onError(error: Throwable)
+
+    fun cancel() {
+        _isCanceled.set(true)
+    }
 
 }

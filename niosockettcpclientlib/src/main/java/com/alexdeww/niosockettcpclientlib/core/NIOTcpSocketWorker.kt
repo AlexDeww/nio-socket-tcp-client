@@ -151,10 +151,19 @@ class NIOTcpSocketWorker(
         doOnDisconnected()
     }
 
+    private fun getNextSendItem(): SendingItem? {
+        var sendItem: SendingItem?
+        while (!Thread.interrupted()) {
+            sendItem = sendDataQueue.poll() ?: return null
+            if (sendItem.operationResult?.isCanceled == false) return sendItem
+        }
+        return null
+    }
+
     private fun processWrite(key: SelectionKey, socketChanel: SocketChannel): Boolean {
         var sendingItem = currentSendingItem
         if (sendingItem == null) {
-            sendingItem = sendDataQueue.poll()
+            sendingItem = getNextSendItem()
             if (sendingItem == null) {
                 key.interestOps(key.interestOps() xor SelectionKey.OP_WRITE)
                 return true
