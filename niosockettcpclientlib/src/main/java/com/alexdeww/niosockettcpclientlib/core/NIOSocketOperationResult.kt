@@ -6,8 +6,7 @@ abstract class NIOSocketOperationResult {
 
     protected val _isCanceled = AtomicBoolean(false)
 
-    val isCanceled: Boolean
-        get() = _isCanceled.get()
+    val isCanceled: Boolean get() = _isCanceled.get()
 
     abstract fun onComplete()
 

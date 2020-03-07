@@ -8,14 +8,14 @@ import com.alexdeww.niosockettcpclientlib.core.NIOTcpSocketWorker
 import com.alexdeww.niosockettcpclientlib.core.safeCall
 
 open class NIOSocketTCPClient<PACKET>(
-        host: String,
-        port: Int,
-        keepAlive: Boolean,
-        bufferSize: Int,
-        connectionTimeout: Int,
-        protected val protocol: NIOSocketPacketProtocol,
-        protected val serializer: NIOSocketSerializer<PACKET>,
-        protected val clientListener: NIOSocketTcpClientListener<PACKET>? = null
+    host: String,
+    port: Int,
+    keepAlive: Boolean,
+    bufferSize: Int,
+    connectionTimeout: Int,
+    protected val protocol: NIOSocketPacketProtocol,
+    protected val serializer: NIOSocketSerializer<PACKET>,
+    protected val clientListener: NIOSocketTcpClientListener<PACKET>? = null
 ) : NIOSocketTCPClientCommon(host, port, keepAlive, bufferSize, connectionTimeout) {
 
     override fun onConnected(socket: NIOTcpSocketWorker) {
@@ -32,20 +32,25 @@ open class NIOSocketTCPClient<PACKET>(
 
     override fun onDataReceived(socket: NIOTcpSocketWorker, data: ByteArray) {
         super.onDataReceived(socket, data)
-         try {
-             processData(data)
-         } catch (e: Throwable) {
-             onError(socket, NIOSocketWorkerState.RECEIVING, e, data)
-         }
+        try {
+            processData(data)
+        } catch (e: Throwable) {
+            onError(socket, NIOSocketWorkerState.RECEIVING, e, data)
+        }
     }
 
-    override fun onError(socket: NIOTcpSocketWorker, state: NIOSocketWorkerState, error: Throwable, data: ByteArray?) {
+    override fun onError(
+        socket: NIOTcpSocketWorker,
+        state: NIOSocketWorkerState,
+        error: Throwable,
+        data: ByteArray?
+    ) {
         super.onError(socket, state, error, data)
         clientListener?.onError(this, state, error)
     }
 
     open fun sendPacket(packet: PACKET, operationResult: NIOSocketOperationResult): Boolean =
-            write(protocol.encode(serializer.serialize(packet)), operationResult)
+        write(protocol.encode(serializer.serialize(packet)), operationResult)
 
     protected open fun doOnPacketReceived(packet: PACKET) {
         clientListener?.onPacketReceived(this, packet)
@@ -53,8 +58,8 @@ open class NIOSocketTCPClient<PACKET>(
 
     protected open fun processData(data: ByteArray) {
         protocol.decode(data)
-                .map { serializer.deSerialize(it) }
-                .forEach { doOnPacketReceived(it) }
+            .map { serializer.deSerialize(it) }
+            .forEach { doOnPacketReceived(it) }
     }
 
 }

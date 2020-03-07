@@ -10,6 +10,11 @@ interface NIOSocketWorkerListener {
 
     fun onDataReceived(socket: NIOTcpSocketWorker, data: ByteArray)
 
-    fun onError(socket: NIOTcpSocketWorker, state: NIOSocketWorkerState, error: Throwable, data: ByteArray?)
+    fun onError(
+        socket: NIOTcpSocketWorker,
+        state: NIOSocketWorkerState,
+        error: Throwable,
+        data: ByteArray?
+    )
 
 }

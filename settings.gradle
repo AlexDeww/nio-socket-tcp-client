@@ -1,1 +1,1 @@
-include ':app', ':niosockettcpclientlib'
+include ':niosockettcpclientlib'

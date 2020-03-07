@@ -7,11 +7,11 @@ import com.alexdeww.niosockettcpclientlib.core.NIOTcpSocketWorker
 import com.alexdeww.niosockettcpclientlib.exception.AlreadyConnected
 
 open class NIOSocketTCPClientCommon(
-        val host: String,
-        val port: Int,
-        val keepAlive: Boolean,
-        private val bufferSize: Int = 8192,
-        private val connectionTimeout: Int = 5000
+    val host: String,
+    val port: Int,
+    val keepAlive: Boolean,
+    private val bufferSize: Int = 8192,
+    private val connectionTimeout: Int = 5000
 ) : NIOSocketWorkerListener {
 
     private val clearLock = Object()
@@ -21,6 +21,7 @@ open class NIOSocketTCPClientCommon(
     val isConnected: Boolean get() = socketWorker?.isConnected?.get() ?: false
 
     override fun onConnected(socket: NIOTcpSocketWorker) {
+        //empty
     }
 
     override fun onDisconnected(socket: NIOTcpSocketWorker) {
@@ -31,12 +32,20 @@ open class NIOSocketTCPClientCommon(
     }
 
     override fun onDataSent(socket: NIOTcpSocketWorker, data: ByteArray) {
+        //empty
     }
 
     override fun onDataReceived(socket: NIOTcpSocketWorker, data: ByteArray) {
+        //empty
     }
 
-    override fun onError(socket: NIOTcpSocketWorker, state: NIOSocketWorkerState, error: Throwable, data: ByteArray?) {
+    override fun onError(
+        socket: NIOTcpSocketWorker,
+        state: NIOSocketWorkerState,
+        error: Throwable,
+        data: ByteArray?
+    ) {
+        //empty
     }
 
     fun connect() {
@@ -44,7 +53,13 @@ open class NIOSocketTCPClientCommon(
 
         synchronized(clearLock) {
             try {
-                socketWorker = NIOTcpSocketWorker(host, port, keepAlive, bufferSize, connectionTimeout)
+                socketWorker = NIOTcpSocketWorker(
+                    host,
+                    port,
+                    keepAlive,
+                    bufferSize,
+                    connectionTimeout
+                )
                 socketWorker?.registerListener(this)
                 workThread = Thread(socketWorker)
                 workThread?.start()
@@ -78,7 +93,6 @@ open class NIOSocketTCPClientCommon(
     }
 
     open fun write(data: ByteArray, operationResult: NIOSocketOperationResult? = null): Boolean =
-            socketWorker?.write(data, operationResult) ?: false
-
+        socketWorker?.write(data, operationResult) ?: false
 
 }

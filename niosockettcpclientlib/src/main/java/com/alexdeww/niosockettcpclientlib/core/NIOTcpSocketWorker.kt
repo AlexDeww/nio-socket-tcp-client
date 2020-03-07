@@ -11,17 +11,17 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 class NIOTcpSocketWorker(
-        val host: String,
-        val port: Int,
-        private val keepAlive: Boolean,
-        private val bufferSize: Int = 8192,
-        private val connectionTimeout: Int = 5000 // 5 seconds
+    val host: String,
+    val port: Int,
+    private val keepAlive: Boolean,
+    private val bufferSize: Int = 8192,
+    private val connectionTimeout: Int = 5000 // 5 seconds
 ) : Runnable {
 
     private class SendingItem(
-            val data: ByteArray,
-            val operationResult: NIOSocketOperationResult?,
-            var buffer: ByteBuffer? = null //инициализируется перед отправкой
+        val data: ByteArray,
+        val operationResult: NIOSocketOperationResult?,
+        var buffer: ByteBuffer? = null //инициализируется перед отправкой
     )
 
     private lateinit var socketChanel: SocketChannel
@@ -86,8 +86,14 @@ class NIOTcpSocketWorker(
         currentSendingItem = null
     }
 
-    private fun doOnError(state: NIOSocketWorkerState, error: Throwable, sendingItem: SendingItem? = null) {
-        if (state == NIOSocketWorkerState.SENDING) safeCall { sendingItem?.operationResult?.onError(error) }
+    private fun doOnError(
+        state: NIOSocketWorkerState,
+        error: Throwable,
+        sendingItem: SendingItem? = null
+    ) {
+        if (state == NIOSocketWorkerState.SENDING) {
+            safeCall { sendingItem?.operationResult?.onError(error) }
+        }
         safeCall { listener?.onError(this, state, error, sendingItem?.data) }
     }
 
@@ -138,7 +144,9 @@ class NIOTcpSocketWorker(
 
     private fun closeConnection() {
         try {
-            sendDataQueue.toMutableList().forEach { safeCall { it.operationResult?.onError(Disconnected()) } }
+            sendDataQueue
+                .toMutableList()
+                .forEach { safeCall { it.operationResult?.onError(Disconnected()) } }
             clear()
             if (isSocketInit) safeCall { socketChanel.close() }
             if (isSelectorInit) safeCall { selector.close() }
@@ -187,9 +195,11 @@ class NIOTcpSocketWorker(
         return true
     }
 
-    private fun processRead(@Suppress("UNUSED_PARAMETER") key: SelectionKey, socketChanel: SocketChannel): Boolean {
-        val numberOfBytesRead = socketChanel.read(receiveBuffer)
-        when (numberOfBytesRead) {
+    private fun processRead(
+        @Suppress("UNUSED_PARAMETER") key: SelectionKey,
+        socketChanel: SocketChannel
+    ): Boolean {
+        when (socketChanel.read(receiveBuffer)) {
             -1 -> return false
             0 -> return true
             else -> {
@@ -221,4 +231,5 @@ class NIOTcpSocketWorker(
         }
         return true
     }
+
 }
